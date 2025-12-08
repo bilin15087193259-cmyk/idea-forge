@@ -37,3 +37,40 @@ export async function generateFormattedNote(text: string): Promise<ProcessedIdea
     };
   }
 }
+// ✅ 把这段加到 /src/services/geminiService.ts 末尾（不影响现有功能）
+// 用你现有的 @google/generative-ai + VITE_GEMINI_API_KEY
+
+export async function debugListModels(): Promise<void> {
+  const key = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+  if (!key) {
+    console.error("VITE_GEMINI_API_KEY is missing");
+    return;
+  }
+  try {
+    // v1beta 列表；你的 SDK 报错里就是 v1beta，所以用它来对齐
+    const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(
+      key
+    )}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      const txt = await res.text();
+      console.error("ListModels failed:", res.status, txt);
+      return;
+    }
+    const data = await res.json();
+    // 只保留支持 generateContent 的模型
+    const usable = (data.models ?? []).filter((m: any) =>
+      (m.supportedGenerationMethods ?? []).includes("generateContent")
+    );
+    console.table(
+      usable.map((m: any) => ({
+        name: m.name, // 例如 "models/gemini-pro" 或 "models/gemini-1.5-flash"
+        displayName: m.displayName,
+        methods: m.supportedGenerationMethods,
+      }))
+    );
+  } catch (e) {
+    console.error("ListModels error:", e);
+  }
+}
+
