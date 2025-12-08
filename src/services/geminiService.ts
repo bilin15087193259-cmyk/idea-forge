@@ -2,11 +2,8 @@
 import { GoogleGenerativeAI } from "@google/genai";
 import type { ProcessedIdea } from "../types";
 
-// 前端读取以 VITE_ 开头的构建期变量
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
-if (!apiKey) {
-  throw new Error("VITE_GEMINI_API_KEY is missing. Set it in Vercel → Project → Settings → Environment Variables.");
-}
+if (!apiKey) throw new Error("VITE_GEMINI_API_KEY is missing");
 
 const genAI = new GoogleGenerativeAI({ apiKey });
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
@@ -21,9 +18,7 @@ export async function generateFormattedNote(text: string): Promise<ProcessedIdea
   const result = await model.generateContent([{ text: prompt }]);
   const raw = result.response.text();
 
-  // 兜底解析（去掉可能的 ```json 包裹）
   const json = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
-
   try {
     const data = JSON.parse(json) as Partial<ProcessedIdea>;
     return {
