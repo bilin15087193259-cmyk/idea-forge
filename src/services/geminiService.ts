@@ -8,7 +8,9 @@ if (!apiKey) throw new Error("VITE_GEMINI_API_KEY is missing");
 
 // 官方 SDK 用法：构造函数直接传字符串 key（不是对象）
 const genAI = new GoogleGenerativeAI(apiKey);
+// src/services/geminiService.ts 仅需改这一行
 const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
 
 export async function generateFormattedNote(text: string): Promise<ProcessedIdea> {
   const prompt =
