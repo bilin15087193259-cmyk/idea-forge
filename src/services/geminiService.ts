@@ -1,65 +1,48 @@
-import { GoogleGenAI } from "@google/genai";
-import { PromptConfig } from "../types";
+// /src/services/geminiService.ts
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import type { ProcessedIdea } from "../types";
 
-const formatTwoDigits = (num: number) => num.toString().padStart(2, '0');
+// why: 前端只能读取以 VITE_ 开头的构建期变量
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+if (!apiKey) {
+  throw new Error("VITE_GEMINI_API_KEY is missing. Set it in Vercel → Project → Settings → Environment Variables.");
+}
 
-export const generateFormattedNote = async (input: string): Promise<string> => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    throw new Error("API Key not found in environment variables.");
-  }
+const genAI = new GoogleGenerativeAI(apiKey);
+// 你也可以换成你想要的模型
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-  const ai = new GoogleGenAI({ apiKey });
+export async function generateFormattedNote(text: string): Promise<ProcessedIdea> {
+  const prompt = [
+    "请将下面内容整理为一份简明的笔记，给出：标题、2~3句摘要、3~5条要点。",
+    "用 JSON 返回：{ title, summary, bullets }。",
+    "内容：",
+    text
+  ].join("\n\n");
 
-  const now = new Date();
-  const dateStr = `${now.getFullYear()}-${formatTwoDigits(now.getMonth() + 1)}-${formatTwoDigits(now.getDate())}`;
-  const timeStr = `${formatTwoDigits(now.getHours())}:${formatTwoDigits(now.getMinutes())}`;
+  const result = await model.generateContent([{ text: prompt }]);
+  const raw = result.response.text();
 
-  const systemInstruction = `
-You are an expert thought organizer assistant. Your goal is to transform the user's natural language input into a structured, clean Markdown format suitable for Obsidian.
-
-## Output Requirements:
-1. You MUST ONLY output Markdown. Do not include any explanations, preambles, or conversational filler.
-2. The top header MUST be in this exact format: # Idea — ${dateStr} ${timeStr}
-3. You must extract and generate three core fields:
-   - **Idea:** Refine the main idea (short, clear).
-   - **Why:** Briefly explain why this is worth recording (infer from context).
-   - **Next Step:** A concrete, actionable next step.
-4. Generate 1-3 tags (without hashtags in the list) that summarize the topic.
-5. In the 'Category' field, output them as Markdown tags (e.g., #Tag1 #Tag2).
-6. You MUST include the original input at the very end under a separator.
-
-## Output Format Template:
-
-# Idea — ${dateStr} ${timeStr}
-
-- **Idea:** {Refined Idea}
-- **Why:** {Reasoning}
-- **Next Step:** {Actionable Step}
-- **Category:** #{Tag1} #{Tag2}
-
----
-**Raw Input:**
-{Original User Input}
-`;
+  // 简单兜底解析（考虑模型可能返回 markdown 代码块）
+  const jsonText = raw
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/```$/i, "")
+    .trim();
 
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: input,
-      config: {
-        systemInstruction: systemInstruction,
-        temperature: 0.7, // Slight creativity for "Why" and "Next Step" inferencing
-      }
-    });
-
-    if (response.text) {
-      return response.text;
-    } else {
-      throw new Error("No content generated from the model.");
-    }
-  } catch (error) {
-    console.error("Gemini API Error:", error);
-    throw error;
+    const data = JSON.parse(jsonText) as ProcessedIdea;
+    return {
+      title: data.title ?? "Untitled",
+      summary: data.summary ?? text.slice(0, 120),
+      bullets: Array.isArray(data.bullets) && data.bullets.length ? data.bullets : ["（无要点）"]
+    };
+  } catch {
+    // why: 即使解析失败也返回一个可展示的结构，避免前端崩溃
+    return {
+      title: "Generated Note",
+      summary: raw.slice(0, 200),
+      bullets: raw.split(/\n+/).slice(0, 5).filter(Boolean)
+    };
   }
-};
+}
