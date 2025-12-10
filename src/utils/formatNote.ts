@@ -1,7 +1,7 @@
 // src/utils/formatNote.ts
 import type { ProcessedIdea } from "../types";
 
-/** 把生成的对象转成 Obsidian 友好的 Markdown 文本 */
+/** 将生成结果对象转为 Obsidian 友好的 Markdown 文本 */
 export function toMarkdown(n: ProcessedIdea): string {
   const title = (n.title || "Untitled").trim();
   const summary = (n.summary || "").trim();
@@ -13,9 +13,8 @@ export function toMarkdown(n: ProcessedIdea): string {
     summary,
     "",
     "## Bullets",
-    ...(bullets.length ? bullets.map(b => `- ${b}`) : ["- （无要点）"]),
+    ...(bullets.length ? bullets.map((b) => `- ${b}`) : ["- （无要点）"]),
   ];
 
   return lines.join("\n");
 }
-
