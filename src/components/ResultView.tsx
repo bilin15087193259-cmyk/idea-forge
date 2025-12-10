@@ -1,23 +1,16 @@
 // src/components/ResultView.tsx
 import React, { useMemo, useState } from "react";
-import { Copy, Check, FileText } from "lucide-react";
-import type { ProcessedIdea } from "../types";
-import { toMarkdown } from "../utils/formatNote";
+import { Copy, Check, FileText, Download } from "lucide-react";
 
-/** 兼容两种用法：要么传 markdown 字符串，要么传结果对象 */
-type ResultViewProps =
-  | { markdown: string; result?: never }
-  | { result: ProcessedIdea | null; markdown?: never };
+type ResultViewProps = {
+  markdown: string;
+};
 
-const ResultView: React.FC<ResultViewProps> = (props) => {
+const ResultView: React.FC<ResultViewProps> = ({ markdown }) => {
   const [copied, setCopied] = useState(false);
 
-  // 统一得到要展示/复制的纯文本
-  const text = useMemo(() => {
-    if ("markdown" in props && typeof props.markdown === "string") return props.markdown;
-    if ("result" in props && props.result) return toMarkdown(props.result);
-    return "";
-  }, [props]);
+  const text = useMemo(() => markdown ?? "", [markdown]);
+  if (!text) return null;
 
   const handleCopy = async () => {
     try {
@@ -29,7 +22,22 @@ const ResultView: React.FC<ResultViewProps> = (props) => {
     }
   };
 
-  if (!text) return null;
+  const handleDownload = () => {
+    try {
+      const filename = suggestFilename(text);
+      const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("Download failed:", e);
+    }
+  };
 
   return (
     <div className="flex flex-col h-full bg-obsidian-card rounded-xl border border-obsidian-muted/20 overflow-hidden shadow-2xl animate-fade-in">
@@ -39,17 +47,27 @@ const ResultView: React.FC<ResultViewProps> = (props) => {
           <span className="ml-2 font-medium">Obsidian Note</span>
         </div>
 
-        <button
-          onClick={handleCopy}
-          className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-md transition-all duration-200 ${
-            copied
-              ? "bg-green-500/20 text-green-300 border-green-500/30"
-              : "bg-obsidian/80 hover:bg-obsidian/60 text-gray-300 border border-obsidian-muted/40"
-          }`}
-        >
-          {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-          {copied ? "Copied" : "Copy Markdown"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleCopy}
+            className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-md transition-all duration-200 ${
+              copied
+                ? "bg-green-500/20 text-green-300 border border-green-500/30"
+                : "bg-obsidian/80 hover:bg-obsidian/60 text-gray-300 border border-obsidian-muted/40"
+            }`}
+          >
+            {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+            {copied ? "Copied" : "Copy Markdown"}
+          </button>
+
+          <button
+            onClick={handleDownload}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-md bg-white text-black hover:bg-gray-200 transition-all border border-transparent"
+          >
+            <Download className="h-4 w-4" />
+            Download .md
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 p-4 overflow-auto relative">
@@ -63,4 +81,30 @@ const ResultView: React.FC<ResultViewProps> = (props) => {
   );
 };
 
-export default ResultView;
+export { ResultView };
+
+/* ---------- helpers ---------- */
+
+// why: 从第一行 '# 标题' 提取文件名；否则用时间戳；保证合法文件名
+function suggestFilename(md: string): string {
+  const firstLine = md.split(/\r?\n/).find((l) => l.trim().length > 0) ?? "";
+  const titleMatch = firstLine.match(/^\s*#\s+(.+?)\s*$/);
+  const raw =
+    (titleMatch?.[1] || "note-" + timeStamp())
+      .replace(/[\\/:*?"<>|]/g, "") // 去除非法字符
+      .trim() || "note";
+  return `${raw}.md`;
+}
+
+function timeStamp(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    d.getFullYear().toString() +
+    pad(d.getMonth() + 1) +
+    pad(d.getDate()) +
+    "-" +
+    pad(d.getHours()) +
+    pad(d.getMinutes())
+  );
+}
